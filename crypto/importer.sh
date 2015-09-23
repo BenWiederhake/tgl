@@ -22,29 +22,35 @@ set -e
 
 for dst in aes bn err hmac md5 pem rand rsa sha
 do
-  cpptag=__TGL_CRYPTO_`echo $dst | tr '[a-z]' '[A-Z]'`_H__
+  upperdst=`echo $dst | tr '[a-z]' '[A-Z]'`
+  cpptag="__TGL_CRYPTO_"$upperdst"_H__"
+  avoidtag="TGL_AVOID_OPENSSL_"$upperdst
   cat raw_header.inc - <<MYEOF > $dst".h"
 #ifndef $cpptag
 #define $cpptag
+
+#ifdef TGL_AVOID_OPENSSL
+#define $avoidtag
+#endif
 
 /* Declarations go here. */
 
 #endif
 MYEOF
   cat raw_header.inc - <<MYEOF > $dst"_openssl.c"
-#ifndef TGL_AVOID_OPENSSL
+#ifndef $avoidtag
 
 #include "$dst.h"
 
 #include <openssl/$dst.h>
 
 /* FIXME */
-#error Not yet implemented: OpenSSL-dependent defines
+#error Not yet implemented: OpenSSL-dependent defines for $dst
 
 #endif
 MYEOF
   cat raw_header.inc - <<MYEOF > $dst"_altern.c"
-#ifdef TGL_AVOID_OPENSSL
+#ifdef $avoidtag
 
 #include "$dst.h"
 
@@ -52,7 +58,7 @@ MYEOF
 // Or similar
 
 /* FIXME */
-#error Not yet implemented: OpenSSL-independent defines
+#error Not yet implemented: OpenSSL-independent defines for $dst
 
 #endif
 MYEOF
