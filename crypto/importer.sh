@@ -20,29 +20,35 @@
 
 set -e
 
+cat raw_header.inc - <<MYEOF > crypto-config.h
+#ifndef __TGL_CRYPTO_CRYPTO_CONFIG_H__
+#define __TGL_CRYPTO_CRYPTO_CONFIG_H__
+
+#ifdef TGL_AVOID_OPENSSL
+MYEOF
+
 for dst in aes bn err hmac md5 pem rand rsa sha
 do
   upperdst=`echo $dst | tr '[a-z]' '[A-Z]'`
   cpptag="__TGL_CRYPTO_"$upperdst"_H__"
   avoidtag="TGL_AVOID_OPENSSL_"$upperdst
+  echo "#define $avoidtag" >> crypto-config.h
   cat raw_header.inc - <<MYEOF > $dst".h"
 #ifndef $cpptag
 #define $cpptag
-
-#ifdef TGL_AVOID_OPENSSL
-#define $avoidtag
-#endif
 
 /* Declarations go here. */
 
 #endif
 MYEOF
   cat raw_header.inc - <<MYEOF > $dst"_openssl.c"
+#include "crypto-config.h"
+
 #ifndef $avoidtag
 
-#include "$dst.h"
-
 #include <openssl/$dst.h>
+
+#include "$dst.h"
 
 /* FIXME */
 #error Not yet implemented: OpenSSL-dependent defines for $dst
@@ -50,12 +56,14 @@ MYEOF
 #endif
 MYEOF
   cat raw_header.inc - <<MYEOF > $dst"_altern.c"
-#ifdef $avoidtag
+#include "crypto-config.h"
 
-#include "$dst.h"
+#ifdef $avoidtag
 
 // #include <gcrypt/$dst.h>
 // Or similar
+
+#include "$dst.h"
 
 /* FIXME */
 #error Not yet implemented: OpenSSL-independent defines for $dst
@@ -63,3 +71,9 @@ MYEOF
 #endif
 MYEOF
 done
+
+cat <<MYEOF >> crypto-config.h
+#endif
+
+#endif
+MYEOF
