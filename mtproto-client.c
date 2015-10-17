@@ -32,9 +32,6 @@
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
-#include <sys/endian.h>
-#endif
 #include <sys/types.h>
 #include <netdb.h>
 #include "crypto/rand.h"
@@ -45,6 +42,7 @@
 #include <netinet/tcp.h>
 #include <poll.h>
 
+#include "tl-parser/portable_endian.h"
 //#include "telegram.h"
 #include "queries.h"
 //#include "loop.h"
@@ -62,30 +60,16 @@
 #include "auto.h"
 #include "tgl-methods-in.h"
 
-#if defined(__FreeBSD__)
-#define __builtin_bswap32(x) bswap32(x)
-#endif
-
-#if defined(__OpenBSD__)
-#define __builtin_bswap32(x) __swap32gen(x)
-#endif
-
 #include "mtproto-common.h"
 
 #define MAX_NET_RES        (1L << 16)
 //extern int log_level;
 
+typedef char error_int_must_be_4_byte[(sizeof (int) == 4) ? 1 : -1];
+typedef char error_long_long_must_be_8_byte[(sizeof (long long) == 8) ? 1 : -1];
+
 static long long generate_next_msg_id (struct tgl_state *TLS, struct tgl_dc *DC, struct tgl_session *S);
 static double get_server_time (struct tgl_dc *DC);
-
-#if !defined(HAVE___BUILTIN_BSWAP32) && !defined(__FreeBSD__) && !defined(__OpenBSD__)
-static inline unsigned __builtin_bswap32(unsigned x) {
-  return ((x << 24) & 0xff000000 ) |
-  ((x << 8) & 0x00ff0000 ) |
-  ((x >> 8) & 0x0000ff00 ) |
-  ((x >> 24) & 0x000000ff );
-}
-#endif
 
 // for statistic only
 static int total_packets_sent;
@@ -153,7 +137,7 @@ static int encrypt_packet_buffer_aes_unauth (const char server_nonce[16], const 
 //
 static int rpc_send_packet (struct tgl_state *TLS, struct connection *c) {
   static struct {
-    long long auth_key_id;
+    long long auth_key_id; // FIXME: Is never set?!
     long long out_msg_id;
     int msg_len;
   } unenc_msg_header;
@@ -164,18 +148,20 @@ static int rpc_send_packet (struct tgl_state *TLS, struct connection *c) {
   struct tgl_dc *DC = TLS->net_methods->get_dc (c);
   struct tgl_session *S = TLS->net_methods->get_session (c);
 
-  unenc_msg_header.out_msg_id = generate_next_msg_id (TLS, DC, S);
-  unenc_msg_header.msg_len = len;
+  unenc_msg_header.out_msg_id = htole64 (generate_next_msg_id (TLS, DC, S));
+  unenc_msg_header.msg_len = htole32 (len);
 
   int total_len = len + 20;
   assert (total_len > 0 && !(total_len & 0xfc000003));
   total_len >>= 2;
   vlogprintf (E_DEBUG, "writing packet: total_len = %d, len = %d\n", total_len, len);
   if (total_len < 0x7f) {
-    assert (TLS->net_methods->write_out (c, &total_len, 1) == 1);
+    char buf = (char)total_len;
+    assert (TLS->net_methods->write_out (c, &buf, 1) == 1);
   } else {
-    total_len = (total_len << 8) | 0x7f;
-    assert (TLS->net_methods->write_out (c, &total_len, 4) == 4);
+    int buf = (total_len << 8) | 0x7f;
+    buf = htole32 (buf);
+    assert (TLS->net_methods->write_out (c, &buf, 4) == 4);
   }
   TLS->net_methods->write_out (c, &unenc_msg_header, 20);
   TLS->net_methods->write_out (c, packet_buffer, len);
@@ -191,10 +177,12 @@ static int rpc_send_message (struct tgl_state *TLS, struct connection *c, void *
 
   int total_len = len >> 2;
   if (total_len < 0x7f) {
-    assert (TLS->net_methods->write_out (c, &total_len, 1) == 1);
+    char buf = (char)total_len;
+    assert (TLS->net_methods->write_out (c, &buf, 1) == 1);
   } else {
-    total_len = (total_len << 8) | 0x7f;
-    assert (TLS->net_methods->write_out (c, &total_len, 4) == 4);
+    int buf = (total_len << 8) | 0x7f;
+    buf = htole32 (buf);
+    assert (TLS->net_methods->write_out (c, &buf, 4) == 4);
   }
 
   TLS->net_methods->incr_out_packet_num (c);
