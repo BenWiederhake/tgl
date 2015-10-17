@@ -47,6 +47,7 @@
 #include <sys/time.h>
 #include <time.h>
 
+#include "tl-parser/portable_endian.h"
 #include "tgl-net-inner.h"
 #include "tgl-net.h"
 #include "tgl.h"
@@ -60,6 +61,13 @@
 #ifndef POLLRDHUP
 #define POLLRDHUP 0
 #endif
+
+#if BYTE_ORDER != LITTLE_ENDIAN
+#error "Sorry, this code was written assuming little endian."
+#endif
+
+typedef char error_int_must_be_4_byte[(sizeof (int) == 4) ? 1 : -1];
+typedef char error_long_long_must_be_8_byte[(sizeof (long long) == 8) ? 1 : -1];
 
 //double get_utime (int clock_id);
 

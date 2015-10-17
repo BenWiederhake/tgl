@@ -37,10 +37,14 @@
 #include <assert.h>
 #include <string.h>
 
+#include "tl-parser/portable_endian.h"
 #include "tl-parser/tl-tl.h"
 #include "generate.h"
 
 #include "tree.h"
+
+typedef char error_int_must_be_4_byte[(sizeof (int) == 4) ? 1 : -1];
+typedef char error_long_long_must_be_8_byte[(sizeof (long long) == 8) ? 1 : -1];
 
 int header;
 
@@ -94,14 +98,15 @@ int verbosity;
 
 int get_int (void) {
   assert (buf_ptr < buf_end);
-  return *(buf_ptr ++);
+  int raw = *(buf_ptr ++);
+  return le32toh (raw);
 }
 
 long long get_long (void) {
   assert (buf_ptr + 1 < buf_end);
   long long r = *(long long *)buf_ptr;
   buf_ptr += 2;
-  return r;
+  return le64toh (r);
 }
 
 static void *malloc0 (int size) {
@@ -113,28 +118,19 @@ static void *malloc0 (int size) {
 
 char *get_string (void) {
   int l = *(unsigned char *)buf_ptr;
-  assert (l != 0xff);
+  assert (l >= 0 && l < 0xfe);
   
   char *res;
-  int tlen = 0;
-  if (l == 0xfe) {
-    l = ((unsigned)get_int ()) >> 8;
-    res = (char *)buf_ptr;
-    tlen = l;
-  } else {
-    res = ((char *)buf_ptr) + 1;
-    tlen = 1 + l;
-  }
+  res = ((char *)buf_ptr) + 1;
+  int tlen = 1 + l;
 
-  int len = l;
-  
   tlen += ((-tlen) & 3);
   assert (!(tlen & 3));
 
   buf_ptr += tlen / 4;
   assert (buf_ptr <= buf_end);
   
-  char *r = strndup (res, len);
+  char *r = strndup (res, l);
   assert (r);
   return r;
 }
