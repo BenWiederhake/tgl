@@ -2442,18 +2442,13 @@ void gen_store_source (void ) {
   printf ("    local_next_token ();\n");
   printf ("  };\n");
   printf ("  if (cur_token_len < 0) { return 0; }\n");
+
+  printf ("  struct function_any_entry entries[] = {\n");
   for (i = 0; i < fn; i++) {
-    printf ("  if (cur_token_len == %d && !memcmp (cur_token, \"%s\", cur_token_len)) {\n", (int)strlen (fns[i]->id), fns[i]->id);
-    printf ("    out_int (0x%08x);\n", fns[i]->name);
-    printf ("    local_next_token ();\n");
-    printf ("    struct paramed_type *P = store_function_%s ();\n", fns[i]->print_id);
-    printf ("    if (!P) { return 0; }\n");
-    printf ("    if (cur_token_len != 1 || *cur_token != ')') { return 0; }\n");
-    printf ("    local_next_token ();\n");
-    printf ("    return P;\n");
-    printf ("  }\n");
+    printf ("    {.token_len = %d, .token_expect = \"%s\", .new_paramed_type = %s, .out_magic = 0x%08x},\n", (int)strlen (fns[i]->id), fns[i]->id, fns[i]->print_id, fns[i]->name);
   }
-  printf ("  return 0;\n");
+  printf ("  };\n");
+  printf ("  return function_any_generic (entries, sizeof (entries)); // Works ONLY because (1) 'entries' is a static array and (2) the compiler can still see its size.\n");
   printf ("}\n");
 }
 
@@ -2519,16 +2514,12 @@ void gen_autocomplete_source (void) {
   printf ("  expect_token_ptr_autocomplete (\"(\", 1);\n");
   printf ("  if (cur_token_len == -3) { set_autocomplete_type (do_autocomplete_function); }\n");
   printf ("  if (cur_token_len < 0) { return 0; }\n");
+  printf ("  struct function_any_entry entries[] = {\n");
   for (i = 0; i < fn; i++) {
-    printf ("  if (cur_token_len == %d && !memcmp (cur_token, \"%s\", cur_token_len)) {\n", (int)strlen (fns[i]->id), fns[i]->id);
-    printf ("    local_next_token ();\n");
-    printf ("    struct paramed_type *P = autocomplete_function_%s ();\n", fns[i]->print_id);
-    printf ("    if (!P) { return 0; }\n");
-    printf ("    expect_token_ptr_autocomplete (\")\", 1);\n");
-    printf ("    return P;\n");
-    printf ("  }\n");
+    printf ("    {.token_len = %d, .token_expect = \"%s\", .new_paramed_type = %s},\n", (int)strlen (fns[i]->id), fns[i]->id, fns[i]->print_id);
   }
-  printf ("  return 0;\n");
+  printf ("  };\n");
+  printf ("  return function_any_generic (entries, sizeof (entries)); // Works ONLY because (1) 'entries' is a static array and (2) the compiler can still see its size.\n");
   printf ("}\n");
 }
 

@@ -231,6 +231,36 @@ static struct paramed_type *paramed_type_dup (struct paramed_type *P) {
   return R;
 }
 
+struct function_any_entry {
+  int token_len;
+  char *token_expect;
+  struct paramed_type *(*new_paramed_type) (void);
+#ifndef IN_AUTOCOMPLETE_H
+  int out_magic;
+#endif
+};
+static struct paramed_type *function_any_generic (struct function_any_entry *entries, size_t entries_num) {
+  size_t i = 0;
+  for (i = 0; i < entries_num; i++) {
+    if (cur_token_len == entries[i].token_len && !memcmp (cur_token, entries[i].token_expect, cur_token_len)) {
+#ifndef IN_AUTOCOMPLETE_H
+      out_int (entries[i].out_magic);
+#endif
+      local_next_token ();
+      struct paramed_type *P = entries[i].new_paramed_type ();
+      if (!P) { return 0; }
+#ifndef IN_AUTOCOMPLETE_H
+      if (cur_token_len != 1 || *cur_token != ')') { return 0; }
+      local_next_token ();
+#else
+      expect_token_ptr_autocomplete (")", 1);
+#endif
+      return P;
+    }
+  }
+  return 0;
+}
+
 #ifndef IN_AUTOCOMPLETE_H
 void tgl_paramed_type_free (struct paramed_type *P) {
   if (ODDP (P)) { return; }
